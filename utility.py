@@ -18,24 +18,30 @@ from mpl_toolkits.mplot3d import proj3d
 import seaborn as sns
 import warnings
 warnings.filterwarnings("ignore")
+from selex import(
+    Sampling_selex,
+    MultimodalGaussian_density_selex,
+)
 
 class Args:
     pass
 
 def create_args():
     args = Args()
-    args.dataset = input("Name of the data set. Options: EMT; Lineage; Bifurcation; Simulation (default: EMT): ") or 'EMT'
-    timepoints = input("Time points of data (default: 0, 0.1, 0.3, 0.9, 2.1): ")
-    args.timepoints = [float(tp.strip()) for tp in timepoints.split(",")] if timepoints else [0, 0.1, 0.3, 0.9, 2.1]
-    args.niters = int(input("Number of training iterations (default: 5000): ") or 5000)
+    args.dataset = input("Name of the data set. Options: doxycol; doxycap; CymR; Phlf; Simulation (default: doxycol): ") or 'doxycol'
+    args.k=int(input("The k-nearest neighbor to consider (default 1250)") or 10)
+    args.n_componets=int(input('The number of componets to reduce to (default 30)') or 5)
+    timepoints = input("Time points of data (default: 1,2,3,4,5,6,7,8,9,10): ")
+    args.timepoints = [float(tp.strip()) for tp in timepoints.split(",")] if timepoints else [10]
+    args.niters = int(input("Number of training iterations (default: 5000): ") or 5)
     args.lr = float(input("Learning rate (default: 3e-3): ") or 3e-3)
-    args.num_samples = int(input("Number of sampling points per epoch (default: 100): ") or 100)
+    args.num_samples = int(input("Number of sampling points per epoch (default: 100): ") or 10)
     args.hidden_dim = int(input("Dimension of the hidden layer (default: 16): ") or 16)
     args.n_hiddens = int(input("Number of hidden layers (default: 4): ") or 4)
     args.activation = input("Activation function (default: Tanh): ") or 'Tanh'
     args.gpu = int(input("GPU device index (default: 0): ") or 0)
-    args.input_dir = input("Input Files Directory (default: Input/): ") or 'Input/'
-    args.save_dir = input("Output Files Directory (default: Output/): ") or 'Output/'
+    args.input_dir = input("Input Files Directory (default: Input/): ") or '../doxycol'
+    args.save_dir = input("Output Files Directory (default: Output/): ") or '../doxy_out'
     args.seed = int(input("Random seed (default: 1): ") or 1)
     return args
 
@@ -254,8 +260,7 @@ def gcd_list(numbers):
 
     return gcd_value
 
-
-def train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,options,device,itr):
+def train_model(mse,func,args,data_train,count_train,train_time,integral_time,sigma_now,options,device,itr):
     warnings.filterwarnings("ignore")
 
     loss = 0
@@ -263,20 +268,20 @@ def train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,opti
     L2_value2 = torch.zeros(1,len(data_train)-1).type(torch.float32).to(device)
     odeint_setp = gcd_list([num * 100 for num in integral_time])/100
     for i in range(len(train_time)-1): 
-        x = Sampling(args.num_samples, train_time,i+1,data_train,0.02,device)
+        x = Sampling_selex(args.num_samples, train_time,i+1,data_train,count_train,0.02,device)
         x.requires_grad=True
         logp_diff_t1 = torch.zeros(x.shape[0], 1).type(torch.float32).to(device)
         g_t1 = logp_diff_t1
         options.update({'t0': integral_time[i+1]})
         options.update({'t1': integral_time[0]})
         z_t0, g_t0, logp_diff_t0 = odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
-        aa = MultimodalGaussian_density(z_t0, train_time, 0, data_train,sigma_now,device) #normalized density
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, 0, data_train,sigma_now,device) #normalized density
         
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
         aa[zero_den] = torch.tensor(1e-16).type(torch.float32).to(device)
         logp_x = torch.log(aa)-logp_diff_t0.view(-1)
         
-        aaa = MultimodalGaussian_density(x, train_time, i+1, data_train,sigma_now,device) * torch.tensor(data_train[i+1].shape[0]/data_train[0].shape[0]) # mass
+        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,sigma_now,device) * torch.tensor(data_train[i+1].shape[0]/data_train[0].shape[0]) # mass
         
         L2_value1[0][i] = mse(aaa,torch.exp(logp_x.view(-1)))
         
@@ -287,7 +292,7 @@ def train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,opti
         options.update({'t1': integral_time[i]})
         z_t0, g_t0, logp_diff_t0= odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
         
-        aa = MultimodalGaussian_density(z_t0, train_time, i, data_train,sigma_now,device)* torch.tensor(data_train[i].shape[0]/data_train[0].shape[0])
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,sigma_now,device)* torch.tensor(data_train[i].shape[0]/data_train[0].shape[0])
         
         #find zero density
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
@@ -300,7 +305,7 @@ def train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,opti
         
     # compute transport cost efficiency
     transport_cost = partial(trans_loss,func=func,device=device,odeint_setp=odeint_setp)
-    x0 = Sampling(args.num_samples,train_time,0,data_train,0.02,device) 
+    x0 = Sampling_selex(args.num_samples,train_time,0,data_train,count_train,0.02,device) 
     logp_diff_t00 = torch.zeros(x0.shape[0], 1).type(torch.float32).to(device)
     g_t00 = logp_diff_t00
     _,_,loss1 = odeint(transport_cost,y0=(x0, g_t00, logp_diff_t00),t = torch.tensor([0, integral_time[-1]]).type(torch.float32).to(device),atol=1e-5,rtol=1e-5,method='midpoint',options = {'step_size': odeint_setp})
@@ -315,7 +320,7 @@ def train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,opti
             
 
 # plot 3d of inferred trajectory of 20 cells
-def plot_3d(func,data_train,train_time,integral_time,args,device):
+def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
     viz_samples = 20
     sigma_a = 0.001
 
@@ -343,7 +348,7 @@ def plot_3d(func,data_train,train_time,integral_time,args,device):
             t_list2.append(integral_time[i])
         
         # traj backward
-        z_t0 =  Sampling(viz_samples, train_time, len(train_time)-1,data_train,sigma_a,device)
+        z_t0 =  Sampling(viz_samples, train_time, len(train_time)-1,data_train,count_train,sigma_a,device)
         #z_t0 = z_t0[z_t0[:,2]>1]
         logp_diff_t0 = torch.zeros(z_t0.shape[0], 1).type(torch.float32).to(device)
         g0 = torch.zeros(z_t0.shape[0], 1).type(torch.float32).to(device)

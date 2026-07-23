@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utility import *
+from selex import *
 
 
     
@@ -19,8 +20,10 @@ if __name__ == '__main__':
     device = torch.device('cuda:' + str(args.gpu)
                             if torch.cuda.is_available() else 'cpu')
     # load dataset
-    data_train = loaddata(args,device)
     integral_time = args.timepoints
+    data_train,count_train=all_t_process(integral_time,args.dataset,args.k,device,args.n_componets)
+    #data_train = loaddata(args,device)
+    
 
     time_pts = range(len(data_train))
     leave_1_out = []
@@ -67,7 +70,7 @@ if __name__ == '__main__':
         for itr in range(1, args.niters + 1):
             optimizer.zero_grad()
             
-            loss, loss1, sigma_now, L2_value1, L2_value2 = train_model(mse,func,args,data_train,train_time,integral_time,sigma_now,options,device,itr)
+            loss, loss1, sigma_now, L2_value1, L2_value2 = train_model(mse,func,args,data_train,count_train,train_time,integral_time,sigma_now,options,device,itr)
 
             
             loss.backward()
