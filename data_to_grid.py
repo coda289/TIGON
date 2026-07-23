@@ -1,10 +1,10 @@
 import faiss
 import numpy as np
 import pandas as pd 
-import torch
 import numpy as np
 from sklearn.decomposition import PCA
-import random
+import joblib
+
 
 def knn_to_grid(df,survivor,X,k):
     df=df[df['Sequence'].isin(survivor)]
@@ -29,18 +29,24 @@ def all_t_process(time,name,dir,k,n_componets):
     pca = PCA(n_components=n_componets)
     for t in time:
         df=pd.read_csv(f'{dir}/{name}{(t):02d}_2d/cleaned.csv')
-        X=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz')['descriptor']
+        X=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz' )['descriptor']
         count=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz')['counts']
-        X_reduced = pca.fit_transform(X)
-        dist,ind,grid=knn_to_grid(df,survivors,X_reduced,k)
-        data.append(torch.from_numpy(grid).type(torch.float32).to(device))
-        mean=np.mean(count[ind])
-        extra.append(mean/np.sum(mean))
-    torch.save(data,f'grid{name}.pt')
-    torch.save(extra,f'counts{name}.pt')
-    return data,extra
+        #X_reduced = pca.fit_transform(X)
+        dist,ind,grid=knn_to_grid(df,survivors,X,k)
+        data.append(grid)
+        mean=np.mean(count[ind],axis=1)
+        extra.append(mean)
+    PCA_data=np.vstack(data)
+    pca.fit(PCA_data)
+    for i in range(len(time)):
+        d=pca.transform(data[i])
+        np.savez_compressed(f'{dir}/{name}{(time[i]):02d}_2d/grid.npz',grid=d,count=extra[i])
+    joblib.dump(pca, f"{dir}/pca_info.pkl")
+    
+    return data,extra 
+
 
 if __name__ == '__main__':
-    all_t_process([4,5,6,7,8,9,10],'doxycol','all',1250,30)
+    all_t_process([1,2,3,4,5,6,7,8,9,10],'doxycol','all',1250,30)
 
 

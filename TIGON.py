@@ -3,16 +3,32 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import argparse
 from utility import *
 from selex import *
 
-
+def create_args_vm():
+    args = Args()
+    args.dataset = 'doxycol'
+    args.k=1250
+    args.n_componets=30
+    args.timepoints = [1,2,3,4,5,6,7,8,9,10]
+    args.niters = 5000
+    args.lr = 3e-3
+    args.num_samples = 200
+    args.hidden_dim =  16
+    args.n_hiddens =4
+    args.activation =  'Tanh'
+    args.gpu = 0
+    args.input_dir = './all'
+    args.save_dir = './doxy_out'
+    args.seed = 1
+    return args
     
     
 if __name__ == '__main__':
-    args=create_args()
-    
-    
+    args=create_args_vm()
+
     torch.enable_grad()
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -21,7 +37,7 @@ if __name__ == '__main__':
                             if torch.cuda.is_available() else 'cpu')
     # load dataset
     integral_time = args.timepoints
-    data_train,count_train=all_t_process(integral_time,args.dataset,args.k,device,args.n_componets)
+    data_train,count_train=loaddata_selex(args,device)
     #data_train = loaddata(args,device)
     
 

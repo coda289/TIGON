@@ -17,6 +17,8 @@ from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 import seaborn as sns
 import warnings
+from sklearn.decomposition import PCA
+
 warnings.filterwarnings("ignore")
 from selex import(
     Sampling_selex,
@@ -275,13 +277,13 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         options.update({'t0': integral_time[i+1]})
         options.update({'t1': integral_time[0]})
         z_t0, g_t0, logp_diff_t0 = odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
-        aa = MultimodalGaussian_density_selex(z_t0, train_time, 0, data_train,sigma_now,device) #normalized density
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, 0, data_train,count_train,sigma_now,device) #normalized density
         
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
         aa[zero_den] = torch.tensor(1e-16).type(torch.float32).to(device)
         logp_x = torch.log(aa)-logp_diff_t0.view(-1)
         
-        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,sigma_now,device) * torch.tensor(data_train[i+1].shape[0]/data_train[0].shape[0]) # mass
+        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,count_train,sigma_now,device) * torch.tensor(data_train[i+1].shape[0]/data_train[0].shape[0]) # mass
         
         L2_value1[0][i] = mse(aaa,torch.exp(logp_x.view(-1)))
         
@@ -292,7 +294,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         options.update({'t1': integral_time[i]})
         z_t0, g_t0, logp_diff_t0= odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
         
-        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,sigma_now,device)* torch.tensor(data_train[i].shape[0]/data_train[0].shape[0])
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,count_train,sigma_now,device)* torch.tensor(data_train[i].shape[0]/data_train[0].shape[0])
         
         #find zero density
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
@@ -321,7 +323,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
 
 # plot 3d of inferred trajectory of 20 cells
 def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
-    viz_samples = 20
+    viz_samples = 10000
     sigma_a = 0.001
 
     t_list = []#list(reversed(integral_time))#integral_time #np.linspace(5, 0, viz_timesteps)
@@ -348,7 +350,7 @@ def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
             t_list2.append(integral_time[i])
         
         # traj backward
-        z_t0 =  Sampling(viz_samples, train_time, len(train_time)-1,data_train,count_train,sigma_a,device)
+        z_t0 =  Sampling_selex(viz_samples, train_time, len(train_time)-1,data_train,count_train,sigma_a,device)
         #z_t0 = z_t0[z_t0[:,2]>1]
         logp_diff_t0 = torch.zeros(z_t0.shape[0], 1).type(torch.float32).to(device)
         g0 = torch.zeros(z_t0.shape[0], 1).type(torch.float32).to(device)
@@ -381,6 +383,16 @@ def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
             v.append(v_t.cpu().detach().numpy())
             t_list.append(plot_time[i+1])
 
+        all_points = np.concatenate(
+            z_t_samples + z_t_data,
+            axis=0
+            )
+
+        pca = PCA(n_components=3)
+        pca.fit(all_points)
+        z_t_samples = [pca.transform(x) for x in z_t_samples]
+        z_t_data = [pca.transform(x) for x in z_t_data]
+
         aa=5#3
         angle1 = 10#30
         angle2 = 75#30
@@ -400,9 +412,9 @@ def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
         #fig.suptitle(f'{t:.1f}day')
         ax1 = plt.axes(projection ='3d')
         ax1.grid(False)
-        ax1.set_xlabel('UMAP1')
-        ax1.set_ylabel('UMAP2')
-        ax1.set_zlabel('UMAP3')
+        ax1.set_xlabel('PCA1')
+        ax1.set_ylabel('PCA2')
+        ax1.set_zlabel('PCA3')
         ax1.set_xlim(-2,2)
         ax1.set_ylim(-2,2)
         ax1.set_zlim(-2,2)
@@ -410,9 +422,9 @@ def plot_3d(func,data_train,count_train,train_time,integral_time,args,device):
         ax1.set_yticks([-2,2])
         ax1.set_zticks([-2,2])
         ax1.view_init(elev=angle1, azim=angle2)
-        ax1.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax1.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax1.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
         ax1.invert_xaxis()
         ax1.get_proj = lambda: np.dot(Axes3D.get_proj(ax1), np.diag([1, 1, 0.7, 1]))
         line_width = 0.3

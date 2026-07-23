@@ -4,7 +4,8 @@ import pandas as pd
 import torch
 import numpy as np
 from sklearn.decomposition import PCA
-import random
+import joblib
+import os
 
 
 
@@ -13,7 +14,7 @@ def Sampling_selex(num_samples,time_all,time_pt,data_train,counts,sigma,device):
     mu = data_train[time_all[time_pt]]
     count=counts[time_all[time_pt]]
     count = np.log1p(count)
-    count/=np.sum(count)
+    count = count / count.sum()
     num_gaussian = mu.shape[0] # mu is number_sample * dimension
     dim = mu.shape[1]
     sigma_matrix = sigma * torch.eye(dim)
@@ -56,8 +57,8 @@ def knn_to_grid(df,survivor,X,k):
     grid=np.mean(sub,axis=1)
     return distances,indices,np.asanyarray(grid)
 
-def all_t_process(time,name,dir,k,device,n_componets):
-    survivors=pd.read_csv(f'{dir}/survivors.csv')
+def all_t_process(survivors,df,X,count,time,name,dir,k,n_componets):
+    #survivors=pd.read_csv(f'{dir}/survivors.csv')
     survivors = survivors.rename(columns={"sequence": "Sequence"})
     survivors = survivors.rename(columns={"count": "Count"})
     survivors=survivors['Sequence'].to_list()
@@ -65,18 +66,31 @@ def all_t_process(time,name,dir,k,device,n_componets):
     extra=[]
     pca = PCA(n_components=n_componets)
     for t in time:
-        df=pd.read_csv(f'{dir}/{name}{(t):02d}_2d/cleaned.csv')
-        X=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz')['descriptor']
-        count=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz')['counts']
-        X_reduced = pca.fit_transform(X)
-        dist,ind,grid=knn_to_grid(df,survivors,X_reduced,k)
-        data.append(torch.from_numpy(grid).type(torch.float32).to(device))
-        mean=np.mean(count[ind])
-        extra.append(mean/np.sum(mean))
-    return data,extra
+        #df=pd.read_csv(f'{dir}/{name}{(t):02d}_2d/cleaned.csv')
+        #X=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz' )['descriptor']
+        #count=np.load(f'{dir}/{name}{(t):02d}_2d/descriptor.npz')['counts']
+        #X_reduced = pca.fit_transform(X)
+        dist,ind,grid=knn_to_grid(df,survivors,X,k)
+        data.append(grid)
+        mean=np.mean(count[ind],axis=1)
+        extra.append(mean)
+    PCA_data=np.vstack(data)
+    pca.fit(PCA_data)
+    for i in range(len(time)):
+        d=pca.transform(data[i])
+        np.savez_compressed(f'{dir}/{name}{(time[i]):02d}_2d/grid.npz',grid=d,count=extra[i])
+    joblib.dump(pca, f"{dir}/pca_info.pkl")
+    
+    return data,extra 
 
-
-
-#tasks to do
-#reimplement rho to take into account the count of the sequence
-#understand how to 'undo' PCA
+def loaddata_selex(args,device):
+    #data=np.load(os.path.join(args.input_dir,(args.dataset+'.npy')),allow_pickle=True)
+    data_train=[]
+    counts_train=[]
+    for t in args.timepoints:
+        with np.load(f'{args.input_dir}/{args.dataset}{(t):02d}_2d/grid.npz') as data:
+            grid=data['grid'] 
+            count=data['count']
+        counts_train.append(torch.from_numpy(count).type(torch.float32).to(device))
+        data_train.append(torch.from_numpy(grid).type(torch.float32).to(device))
+    return data_train,counts_train
