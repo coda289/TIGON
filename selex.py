@@ -41,7 +41,7 @@ def MultimodalGaussian_density_selex(x,time_all,time_pt,data_train,counts,sigma,
     for i in range(num_gaussian):
         m = torch.distributions.multivariate_normal.MultivariateNormal(mu[i,:], sigma_matrix)
         p_unn = p_unn + count[i]*torch.exp(m.log_prob(x)).type(torch.float32).to(device)
-    p_n = p_unn/num_gaussian
+    p_n = p_unn/count.sum()
     return p_n
 
 def knn_to_grid(df,survivor,X,k):

@@ -283,7 +283,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         aa[zero_den] = torch.tensor(1e-16).type(torch.float32).to(device)
         logp_x = torch.log(aa)-logp_diff_t0.view(-1)
         
-        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,count_train,sigma_now,device) * torch.tensor(data_train[i+1].shape[0]/data_train[0].shape[0]) # mass
+        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,count_train,sigma_now,device) * torch.tensor(count_train[i+1].sum()/count_train.sum()) # mass
         
         L2_value1[0][i] = mse(aaa,torch.exp(logp_x.view(-1)))
         
@@ -294,7 +294,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         options.update({'t1': integral_time[i]})
         z_t0, g_t0, logp_diff_t0= odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
         
-        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,count_train,sigma_now,device)* torch.tensor(data_train[i].shape[0]/data_train[0].shape[0])
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,count_train,sigma_now,device)* torch.tensor(count_train[i+1].sum()/count_train.sum())
         
         #find zero density
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
