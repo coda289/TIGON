@@ -31,19 +31,19 @@ class Args:
 def create_args():
     args = Args()
     args.dataset = input("Name of the data set. Options: doxycol; doxycap; CymR; Phlf; Simulation (default: doxycol): ") or 'doxycol'
-    args.k=int(input("The k-nearest neighbor to consider (default 1250)") or 10)
-    args.n_componets=int(input('The number of componets to reduce to (default 30)') or 5)
+    args.k=int(input("The k-nearest neighbor to consider (default 1250)") or 1250)
+    args.n_componets=int(input('The number of componets to reduce to (default 30)') or 30)
     timepoints = input("Time points of data (default: 1,2,3,4,5,6,7,8,9,10): ")
-    args.timepoints = [float(tp.strip()) for tp in timepoints.split(",")] if timepoints else [10]
-    args.niters = int(input("Number of training iterations (default: 5000): ") or 5)
+    args.timepoints = [float(tp.strip()) for tp in timepoints.split(",")] if timepoints else [1,2,3,4,5,6,7,8,9,10]
+    args.niters = int(input("Number of training iterations (default: 5000): ") or 5000)
     args.lr = float(input("Learning rate (default: 3e-3): ") or 3e-3)
-    args.num_samples = int(input("Number of sampling points per epoch (default: 100): ") or 10)
+    args.num_samples = int(input("Number of sampling points per epoch (default: 100): ") or 100)
     args.hidden_dim = int(input("Dimension of the hidden layer (default: 16): ") or 16)
     args.n_hiddens = int(input("Number of hidden layers (default: 4): ") or 4)
     args.activation = input("Activation function (default: Tanh): ") or 'Tanh'
     args.gpu = int(input("GPU device index (default: 0): ") or 0)
-    args.input_dir = input("Input Files Directory (default: Input/): ") or '../doxycol'
-    args.save_dir = input("Output Files Directory (default: Output/): ") or '../doxy_out'
+    args.input_dir = input("Input Files Directory (default: Input/): ") or './grid_new'
+    args.save_dir = input("Output Files Directory (default: Output/): ") or './'
     args.seed = int(input("Random seed (default: 1): ") or 1)
     return args
 
@@ -283,7 +283,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         aa[zero_den] = torch.tensor(1e-16).type(torch.float32).to(device)
         logp_x = torch.log(aa)-logp_diff_t0.view(-1)
         
-        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,count_train,sigma_now,device) * torch.tensor(count_train[i+1].sum()/count_train.sum()) # mass
+        aaa = MultimodalGaussian_density_selex(x, train_time, i+1, data_train,count_train,sigma_now,device) * torch.tensor(count_train[i+1].sum()/count_train[0].sum()) # mass
         
         L2_value1[0][i] = mse(aaa,torch.exp(logp_x.view(-1)))
         
@@ -294,7 +294,7 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
         options.update({'t1': integral_time[i]})
         z_t0, g_t0, logp_diff_t0= odesolve(func,y0=(x, g_t1, logp_diff_t1),options=options)
         
-        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,count_train,sigma_now,device)* torch.tensor(count_train[i+1].sum()/count_train.sum())
+        aa = MultimodalGaussian_density_selex(z_t0, train_time, i, data_train,count_train,sigma_now,device)* torch.tensor(count_train[i+1].sum()/count_train[0].sum())
         
         #find zero density
         zero_den = (aa < 1e-16).nonzero(as_tuple=True)[0]
@@ -315,8 +315,8 @@ def train_model(mse,func,args,data_train,count_train,train_time,integral_time,si
 
 
     if (itr >1):
-        if ((itr % 100 == 0) and (itr<=args.niters-400) and (sigma_now>0.02) and (L2_value1.mean()<=0.0003)):
-            sigma_now = sigma_now/2
+        if ((itr % 50 == 0) and (itr<=args.niters-400) and (sigma_now>0.02) and (L2_value1.mean()<=0.0003) and args.sigma_change):
+            sigma_now = sigma_now-.05#changes here bc it was causing desnsity to blow up
 
     return loss, loss1, sigma_now, L2_value1, L2_value2
             

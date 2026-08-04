@@ -21,13 +21,16 @@ def create_args_vm():
     args.activation =  'Tanh'
     args.gpu = 0
     args.input_dir = './all'
-    args.save_dir = './doxy_out'
+    args.save_dir = './NN_sigma_ch'
     args.seed = 1
+    args.sigma_change=True
+    args.last=0
     return args
     
     
 if __name__ == '__main__':
     args=create_args_vm()
+    
 
     torch.enable_grad()
     random.seed(args.seed)
@@ -74,16 +77,17 @@ if __name__ == '__main__':
     if args.save_dir is not None:
         if not os.path.exists(args.save_dir):
             os.makedirs(args.save_dir)
-        ckpt_path = os.path.join(args.save_dir, 'ckpt.pth')
+        ckpt_path = os.path.join(args.save_dir, f'ckpt_iter{last}.pth')
         if os.path.exists(ckpt_path):
             checkpoint = torch.load(ckpt_path)
             func.load_state_dict(checkpoint['func_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 'optimizer_state_dict' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print('Loaded ckpt from {}'.format(ckpt_path))
 
     try:
-        sigma_now = 1
-        for itr in range(1, args.niters + 1):
+        sigma_now = .3
+        for itr in range(args.last, args.niters + 1):
             optimizer.zero_grad()
             
             loss, loss1, sigma_now, L2_value1, L2_value2 = train_model(mse,func,args,data_train,count_train,train_time,integral_time,sigma_now,options,device,itr)
@@ -102,9 +106,17 @@ if __name__ == '__main__':
             print('Iter: {}, loss: {:.4f}'.format(itr, loss.item()))
             
             
-            if itr % 500 == 0:
+            if itr % 250 == 0 or itr==5:
                 ckpt_path = os.path.join(args.save_dir, 'ckpt_itr{}.pth'.format(itr))
-                torch.save({'func_state_dict': func.state_dict()}, ckpt_path)
+                torch.save({
+                        'func_state_dict': func.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'LOSS':LOSS,
+                        'TRANS':Trans,
+                        'L2_1': L2_1,
+                        'L2_2': L2_2,
+                        'Sigma': Sigma
+                    }, ckpt_path)
                 print('Iter {}, Stored ckpt at {}'.format(itr, ckpt_path))
                 
             
