@@ -45,6 +45,8 @@ def create_args():
     args.input_dir = input("Input Files Directory (default: Input/): ") or './grid_new'
     args.save_dir = input("Output Files Directory (default: Output/): ") or './'
     args.seed = int(input("Random seed (default: 1): ") or 1)
+    args.last = int(input("Last Iteration completed (default: 5000)")) or 5000
+    args.sigma_change = bool(input("Changing Sigma (default: False)")) or False
     return args
 
 
@@ -471,56 +473,3 @@ def Jacobian(f, z):
     jac = torch.cat(jac, 1)
     return jac
 
-# plot avergae jac of v of cells (z_t) at time (time_pt)
-def plot_jac_v(func,z_t,time_pt,title,gene_list,args,device):
-    g_xt0 = torch.zeros(1, 1).type(torch.float32).to(device)
-    logp_diff_xt0 = g_xt0
-    # compute the mean of jacobian of v within cells z_t at time (time_pt)
-    dim = z_t.shape[1]
-    jac = np.zeros((dim,dim))
-    for i in range(z_t.shape[0]):
-        x_t = z_t[i,:].reshape([1,dim])
-        v_xt = func(torch.tensor(time_pt).type(torch.float32).to(device),(x_t,g_xt0, logp_diff_xt0))[0]
-        jac = jac+Jacobian(v_xt, x_t).reshape(dim,dim).detach().cpu().numpy()
-    jac = jac/z_t.shape[0]
-    
-    fig = plt.figure(figsize=(5, 4), dpi=200)
-    ax = fig.add_subplot(111)
-    plt.tight_layout()
-    plt.axis('off')
-    plt.margins(0, 0)
-    ax.set_title('Jacobian of velocity')
-    sns.heatmap(jac,cmap="coolwarm",xticklabels=gene_list,yticklabels=gene_list)
-    ax.set_xticks([])  # Remove x-axis tick marks
-    ax.set_yticks([])  # Remove y-axis tick marks
-    ax.axis('off')
-    #plt.savefig(os.path.join(args.save_dir, title),format="pdf",
-    #            pad_inches=0.2, bbox_inches='tight')
-    plt.show()
-                
-
-# plot avergae gradients of g of cells (z_t) at time (time_pt)
-def plot_grad_g(func,z_t,time_pt,title,gene_list,args,device):
-    g_xt0 = torch.zeros(1, 1).type(torch.float32).to(device)
-    logp_diff_xt0 = g_xt0
-    dim = z_t.shape[1]
-    gg = np.zeros((dim,dim))
-    for i in range(z_t.shape[0]):
-        x_t = z_t[i,:].reshape([1,dim])
-        g_xt = func(torch.tensor(time_pt).type(torch.float32).to(device),(x_t,g_xt0, logp_diff_xt0))[1]
-        gg = gg+torch.autograd.grad(g_xt, x_t, torch.ones_like(g_xt),retain_graph=True, create_graph=True)[0].view(x_t.shape[0], -1).reshape(dim,1).detach().cpu().numpy()
-    gg = gg/z_t.shape[0]
-    
-    fig= plt.figure(figsize=(1, 4), dpi=200)
-    ax = fig.add_subplot(111)
-    plt.tight_layout()
-    plt.axis('off')
-    plt.margins(0, 0)
-    ax.set_title('Gradient of growth')
-    sns.heatmap(gg,cmap="coolwarm",xticklabels=[],yticklabels=gene_list)
-    ax.set_xticks([])  # Remove x-axis tick marks
-    ax.set_yticks([])  # Remove y-axis tick marks
-    ax.axis('off') 
-    #plt.savefig(os.path.join(args.save_dir, title),format="pdf",
-    #            pad_inches=0.2, bbox_inches='tight')
-    plt.show()

@@ -77,7 +77,7 @@ if __name__ == '__main__':
     if args.save_dir is not None:
         if not os.path.exists(args.save_dir):
             os.makedirs(args.save_dir)
-        ckpt_path = os.path.join(args.save_dir, f'ckpt_iter{last}.pth')
+        ckpt_path = os.path.join(args.save_dir, f'ckpt_iter{args.last}.pth')
         if os.path.exists(ckpt_path):
             checkpoint = torch.load(ckpt_path)
             func.load_state_dict(checkpoint['func_state_dict'])
